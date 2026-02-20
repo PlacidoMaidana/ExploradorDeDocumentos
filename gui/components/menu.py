@@ -1,10 +1,19 @@
 import tkinter as tk
 from gui.components.gemini_assistant import abrir_modal_gemini
 
-def crear_menu_contextual(parent, text_widget):
-    """Crea y retorna un menú contextual con todas las funcionalidades"""
-    menu = tk.Menu(parent.root, tearoff=0)
-    
+def crear_menu_contextual(parent, text_widget=None):
+    """
+    parent: instancia de FileExplorerApp
+    text_widget: widget Text/ScrolledText (opcional)
+    """
+    # Fallback robusto: root explícito o toplevel del widget
+    root = getattr(parent, "root", None) or parent.winfo_toplevel()
+    menu = tk.Menu(root, tearoff=0)
+
+    # Si no lo pasan, intenta tomarlo del parent
+    if text_widget is None:
+        text_widget = getattr(parent, "text_area", None)
+
     # Comandos básicos
     menu.add_command(label="📋 Copiar", command=parent.copiar_seleccion)
     # Opción con chispa (La más moderna)
@@ -28,7 +37,11 @@ def crear_menu_contextual(parent, text_widget):
     menu.add_separator()
     
     # Exportación
-    menu.add_command(label="💾 Exportar a Markdown", command=parent.exportar_a_markdown)
-    menu.add_command(label="💾 Exportar a TXT", command=parent.exportar_a_txt)
+    menu.add_command(label="💾 Exportar a Markdown", command=parent.exportar_markdown)
+    menu.add_command(label="📄 Exportar a TXT", command=parent.exportar_txt)
     
     return menu
+
+# ejemplo de uso seguro:
+# if text_widget:
+#     menu.add_command(label="Copiar", command=lambda: text_widget.event_generate("<<Copy>>"))

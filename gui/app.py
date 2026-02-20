@@ -15,16 +15,15 @@ from core.palabrasClave import VisorArchivos
 
 
 class FileExplorerApp(ttk.Frame):
-    def __init__(self, root):
-        super().__init__(root)
-        self.root = root
+    def __init__(self, master, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.root = master  # <- compatibilidad para componentes que usan parent.root
         self.directorio = None
         self.estructura_arbol = []
         self.carpeta_seleccionada = None
         self.archivos_seleccionados = set()  # Usamos set para evitar duplicados
         self.lineas_seleccionadas = {}  # Diccionario para mapear línea -> archivo
         self.tipo_operacion_actual = "esquema"
-        
         
         # pyinstaller --onefile --windowed --icon=File-explorer.ico --name="Explorador" main.py
         # Intentar cargar el icono si existe
@@ -38,7 +37,7 @@ class FileExplorerApp(ttk.Frame):
         
     def crear_menu_principal(self):
         """Crea el menú principal de la aplicación"""
-        menubar = tk.Menu(self.root)
+        menubar = tk.Menu(self.master, tearoff=0)
         
         # Menú Archivo
         menu_archivo = tk.Menu(menubar, tearoff=0)
@@ -47,12 +46,12 @@ class FileExplorerApp(ttk.Frame):
                                 accelerator="Ctrl+O")
         menu_archivo.add_separator()
         menu_archivo.add_command(label="💾 Exportar a Markdown", 
-                                command=self.exportar_a_markdown)
+                                command=self.exportar_markdown)
         menu_archivo.add_command(label="💾 Exportar a TXT", 
-                                command=self.exportar_a_txt)
+                                command=self.exportar_txt)
         menu_archivo.add_separator()
         menu_archivo.add_command(label="🚪 Salir", 
-                                command=self.root.quit,
+                                command=self.master.quit,
                                 accelerator="Ctrl+Q")
         menubar.add_cascade(label="Archivo", menu=menu_archivo)
         
@@ -92,28 +91,29 @@ class FileExplorerApp(ttk.Frame):
                             command=self.contraer_todo)
         menubar.add_cascade(label="Ver", menu=menu_ver)
         
-        self.root.config(menu=menubar)
+        self.master.config(menu=menubar)
         self.configurar_atajos_globales()
         
     def configurar_atajos_globales(self):
         """Configura atajos de teclado globales"""
-        self.root.bind('<Control-o>', lambda e: self.seleccionar_directorio())
-        self.root.bind('<Control-f>', lambda e: self.abrir_busqueda_reemplazo())
-        self.root.bind('<Control-q>', lambda e: self.root.quit())
-        self.root.bind('<Control-a>', lambda e: self.seleccionar_todo())
-        self.root.bind('<Control-c>', lambda e: self.copiar_seleccion())
+        self.master.bind('<Control-o>', lambda e: self.seleccionar_directorio())
+        self.master.bind('<Control-f>', lambda e: self.abrir_busqueda_reemplazo())
+        self.master.bind('<Control-q>', lambda e: self.master.quit())
+        self.master.bind('<Control-a>', lambda e: self.seleccionar_todo())
+        self.master.bind('<Control-c>', lambda e: self.copiar_seleccion())
         
     def seleccionar_directorio(self):
         """Abre diálogo para seleccionar directorio"""
         directorio = filedialog.askdirectory(title="Seleccione el directorio a explorar")
-        if directorio:
-             # Instanciamos VisorArchivos con el directorio y el Text
+        if not directorio:
+            return
 
-            self.visor = VisorArchivos(directorio, self.salida)
-            # Guardamos el directorio actual
-
+        try:
+            self.visor = VisorArchivos(directorio, self.text_area)
             self.directorio = directorio
             self.cargar_directorio(directorio)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
         
     def configurar_interfaz(self):
         """Configura los elementos de la interfaz gráfica"""
@@ -272,7 +272,7 @@ class FileExplorerApp(ttk.Frame):
     
     def abrir_busqueda_reemplazo(self):
         """Abre la ventana de búsqueda y reemplazo"""
-        crear_ventana_busqueda_reemplazo(self.root, self.text_area)
+        crear_ventana_busqueda_reemplazo(self.master, self.text_area)
         
     def mostrar_esquema(self):
         """Muestra el esquema del directorio actual"""
@@ -342,12 +342,12 @@ class FileExplorerApp(ttk.Frame):
             return
             
         def actualizar_progreso(actual, total):
-            self.root.title(f"Procesando... {actual}/{total}")
+            self.master.title(f"Procesando... {actual}/{total}")
             
         contenido = mostrar_contenido_archivos(self.directorio, progress_callback=actualizar_progreso)
         self.text_area.delete(1.0, tk.END)
         self.text_area.insert(tk.END, contenido)
-        self.root.title("Explorador de Directorios")
+        self.master.title("Explorador de Directorios")
         self.tipo_operacion_actual = "contenido_completo"
     
     def alternar_plegado(self, event):
@@ -468,8 +468,8 @@ class FileExplorerApp(ttk.Frame):
         """Copia el texto seleccionado al portapapeles"""
         try:
             seleccion = self.text_area.get(tk.SEL_FIRST, tk.SEL_LAST)
-            self.root.clipboard_clear()
-            self.root.clipboard_append(seleccion)
+            self.master.clipboard_clear()
+            self.master.clipboard_append(seleccion)
             messagebox.showinfo("Éxito", "Texto copiado al portapapeles")
         except tk.TclError:
             messagebox.showwarning("Advertencia", "No hay texto seleccionado para copiar")
@@ -480,45 +480,53 @@ class FileExplorerApp(ttk.Frame):
         self.text_area.mark_set(tk.INSERT, "1.0")
         self.text_area.see(tk.INSERT)
 
-    def exportar_a_markdown(self):
-        """Exporta el contenido actual a formato Markdown"""
-        contenido = self._get_text_content()
+    def exportar_markdown(self):
+        """Exporta el contenido como archivo Markdown"""
+        contenido = self.text_area.get("1.0", "end-1c").strip()
+        
         if not contenido:
             messagebox.showwarning("Sin contenido", "No hay contenido para exportar.")
             return
 
-        ruta = filedialog.asksaveasfilename(
+        ruta_archivo = filedialog.asksaveasfilename(
+            title="Guardar como Markdown",
             defaultextension=".md",
-            filetypes=[("Markdown", "*.md"), ("Todos", "*.*")],
-            title="Guardar como Markdown"
+            filetypes=[("Archivos Markdown", "*.md"), ("Todos los archivos", "*.*")]
         )
-        if not ruta:
+        
+        if not ruta_archivo:
             return
+            
+        try:
+            with open(ruta_archivo, "w", encoding="utf-8") as archivo:
+                archivo.write(contenido)
+            messagebox.showinfo("Exportación exitosa", f"Archivo guardado en:\n{ruta_archivo}")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{str(e)}")
 
-        with open(ruta, "w", encoding="utf-8", newline="\n") as f:
-            f.write(contenido)
-
-        messagebox.showinfo("Exportación completa", f"Archivo guardado en:\n{ruta}")
-
-    def exportar_a_txt(self):
-        """Exporta el contenido actual a formato TXT"""
-        contenido = self._get_text_content()
+    def exportar_txt(self):
+        """Exporta el contenido como archivo de texto"""
+        contenido = self.text_area.get("1.0", "end-1c").strip()
+        
         if not contenido:
             messagebox.showwarning("Sin contenido", "No hay contenido para exportar.")
             return
 
-        ruta = filedialog.asksaveasfilename(
+        ruta_archivo = filedialog.asksaveasfilename(
+            title="Guardar como TXT",
             defaultextension=".txt",
-            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
-            title="Guardar como TXT"
+            filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
         )
-        if not ruta:
+        
+        if not ruta_archivo:
             return
-
-        with open(ruta, "w", encoding="utf-8", newline="\n") as f:
-            f.write(contenido)
-
-        messagebox.showinfo("Exportación completa", f"Archivo guardado en:\n{ruta}")
+            
+        try:
+            with open(ruta_archivo, "w", encoding="utf-8") as archivo:
+                archivo.write(contenido)
+            messagebox.showinfo("Exportación exitosa", f"Archivo guardado en:\n{ruta_archivo}")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{str(e)}")
 
     def cargar_directorio(self, ruta):
         """Carga un directorio y genera el esquema"""
@@ -526,6 +534,6 @@ class FileExplorerApp(ttk.Frame):
         self.estructura_arbol = generar_esquema_estructurado(ruta)
         self.renderizar_esquema(self.estructura_arbol)
         self.tipo_operacion_actual = "esquema"
-        self.root.title(f"Explorador de Directorios - {ruta}")
+        self.master.title(f"Explorador de Directorios - {ruta}")
         # Limpiar selección al cargar nuevo directorio
         self.limpiar_seleccion()
