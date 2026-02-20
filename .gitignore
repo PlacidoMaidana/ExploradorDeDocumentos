@@ -1,0 +1,21 @@
+# Ignorar entornos virtuales
+
+venv/
+.env/
+
+# Archivos compilados y cachés
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Builds y distribuciones
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Archivos temporales y binarios
+*.log
+*.zip
+Thumbs.db
