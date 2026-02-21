@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
+from utils.constants import EXT_VALIDAS
 from core.scheme_generator import generar_esquema_estructurado, expandir_todo, contraer_todo, expandir_carpeta, contraer_carpeta
 from core.content_processor import mostrar_contenido_archivos, mostrar_contenido_raiz
 from core.markdown_converter import exportar_a_markdown, exportar_a_txt
@@ -84,6 +85,9 @@ class FileExplorerApp(ttk.Frame):
         menu_ver.add_command(label="??? Ver palabras clave",
                      command=lambda: self.visor.mostrar_palabras_clave() if hasattr(self, "visor") else None)
         
+        menu_ver.add_separator()
+        menu_ver.add_command(label="ℹ️ Info sobre Íconos", 
+                            command=self.mostrar_info_iconos)
         menu_ver.add_separator()
         menu_ver.add_command(label="🔼 Expandir Todo", 
                             command=self.expandir_todo)
@@ -222,8 +226,12 @@ class FileExplorerApp(ttk.Frame):
         if "📁 " in line_text:
             self.carpeta_seleccionada = line_text.split("📁 ", 1)[1].strip()
             # No seleccionamos carpetas, solo archivos
-        elif "📄 " in line_text:
-            nombre_archivo = line_text.split("📄 ", 1)[1].strip()
+        elif "📄 " in line_text or "📋 " in line_text:
+            # Manejar tanto archivos con contenido visualizable (📄) como sin contenido (📋)
+            if "📄 " in line_text:
+                nombre_archivo = line_text.split("📄 ", 1)[1].strip()
+            else:
+                nombre_archivo = line_text.split("📋 ", 1)[1].strip()
             
             # Obtener la ruta completa del archivo
             ruta_completa = self._obtener_ruta_completa_archivo(nombre_archivo)
@@ -263,6 +271,60 @@ class FileExplorerApp(ttk.Frame):
             total = len(self.archivos_seleccionados)
             self.lbl_info_seleccion.config(text=f"Archivos seleccionados: {total}")
         
+    def mostrar_info_iconos(self):
+        """Muestra información sobre los íconos utilizados"""
+        info_texto = """📁 CARPETAS/DIRECTORIOS
+  ► - Carpeta contraída (haga doble clic para expandir)
+  ▼ - Carpeta expandida (haga doble clic para contraer)
+
+📄 ARCHIVOS CON CONTENIDO VISUALIZABLE
+  Archivos que pueden mostrar su contenido:
+  • Código: .py, .js, .ts, .tsx, .jsx, .php, .css, .html
+  • Documentos: .txt, .md, .json, .csv, .xml, .ico
+  • Documentos de oficina: .docx, .pptx, .doc, .ppt
+  • PDFs: .pdf
+
+📋 ARCHIVOS SIN CONTENIDO VISUALIZABLE
+  Archivos que están listados pero no pueden mostrar contenido:
+  • Archivos con extensiones no soportadas
+  • Archivos binarios no compatibles
+  • Archivos sin extensión
+
+NOTA: Todos los archivos se muestran en el explorador,
+pero solo se puede ver el contenido de archivos soportados."""
+        
+        # Crear ventana de información
+        ventana_info = tk.Toplevel(self.master)
+        ventana_info.title("Información sobre Íconos")
+        ventana_info.geometry("500x400")
+        ventana_info.resizable(False, False)
+        ventana_info.transient(self.master)
+        ventana_info.grab_set()
+        
+        # Centrar la ventana
+        ventana_info.update_idletasks()
+        x = (ventana_info.winfo_screenwidth() - ventana_info.winfo_width()) // 2
+        y = (ventana_info.winfo_screenheight() - ventana_info.winfo_height()) // 2
+        ventana_info.geometry(f"+{x}+{y}")
+        
+        # Texto de información
+        frame_texto = ttk.Frame(ventana_info)
+        frame_texto.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text_area = tk.Text(frame_texto, wrap=tk.WORD, font=("Consolas", 10))
+        scrollbar = ttk.Scrollbar(frame_texto, orient=tk.VERTICAL, command=text_area.yview)
+        text_area.configure(yscrollcommand=scrollbar.set)
+        
+        text_area.insert(tk.END, info_texto)
+        text_area.config(state=tk.DISABLED)
+        
+        text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Botón cerrar
+        ttk.Button(ventana_info, text="Cerrar", 
+                  command=ventana_info.destroy).pack(pady=10)
+    
     def limpiar_seleccion(self):
         """Limpia toda la selección de archivos"""
         self.archivos_seleccionados.clear()
@@ -361,8 +423,12 @@ class FileExplorerApp(ttk.Frame):
         if "📁 " in line_text:
             nombre = line_text.split("📁 ", 1)[1].strip()
             es_directorio = True
-        elif "📄 " in line_text:
-            nombre = line_text.split("📄 ", 1)[1].strip()
+        elif "📄 " in line_text or "📋 " in line_text:
+            # Manejar tanto archivos con contenido visualizable (📄) como sin contenido (📋)
+            if "📄 " in line_text:
+                nombre = line_text.split("📄 ", 1)[1].strip()
+            else:
+                nombre = line_text.split("📋 ", 1)[1].strip()
             es_directorio = False
         else:
             return
@@ -399,7 +465,12 @@ class FileExplorerApp(ttk.Frame):
                 else:
                     prefijo += "► "
             else:
-                icono = "📄 "
+                # Verificar si el archivo tiene extensión válida para mostrar contenido
+                ext = os.path.splitext(item['nombre'])[1].lower()
+                if ext in EXT_VALIDAS:
+                    icono = "📄 "  # Archivo con contenido visualizable
+                else:
+                    icono = "📋 "  # Archivo sin contenido visualizable
                 prefijo += "  "
                 
             self.text_area.insert(tk.END, prefijo + icono + item['nombre'] + "\n")
@@ -420,6 +491,17 @@ class FileExplorerApp(ttk.Frame):
             full_path = os.path.join(self.directorio, ruta_archivo)
             if os.path.exists(full_path):
                 ext = os.path.splitext(ruta_archivo)[1].lower()
+                
+                # Verificar si la extensión es válida para mostrar contenido
+                if ext not in EXT_VALIDAS:
+                    if ext == '':
+                        tipo_archivo = "sin extensión"
+                    else:
+                        tipo_archivo = f"extensión {ext}"
+                    salida += f"\n{'='*80}\n📄 {ruta_archivo}\n{'='*80}\n\n[TIPO DE ARCHIVO NO SOPORTADO]\nEste archivo tiene {tipo_archivo} que no está permitida para visualización de contenido.\n\nExtensiones soportadas: {', '.join(sorted(EXT_VALIDAS))}\n\nEl archivo está listado pero su contenido no se puede mostrar por restricciones de seguridad.\n\n"
+                    archivos_con_error += 1
+                    continue
+                
                 try:
                     # Para archivos especiales (Word, PowerPoint, PDF)
                     if ext in ['.docx', '.pptx', '.pdf']:

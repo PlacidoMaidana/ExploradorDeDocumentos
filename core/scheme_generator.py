@@ -22,10 +22,9 @@ def generar_esquema_estructurado(ruta, nivel=0):
                 item['contenido'] = generar_esquema_estructurado(ruta_completa, nivel + 1)
                 estructura.append(item)
             else:
-                # Solo incluir archivos con extensiones permitidas
-                ext = os.path.splitext(elemento)[1].lower()
-                if ext in EXT_VALIDAS:
-                    estructura.append(item)
+                # Mostrar todos los archivos sin filtrar por extensión
+                # El filtrado se hace solo al ver el contenido
+                estructura.append(item)
     except PermissionError:
         pass
     return estructura
